@@ -1,7 +1,17 @@
 * auto-gen TOC:
 {:toc}
 
-# Operations
+# Basic functions
+
+tags: function : basic operators and functions
+
+## Properties
+
+tags: property : properties of operators and functions
+
+### Legend
+
+tags: legend : shortcuts for types
 
 Legend:
 * A - all
@@ -11,26 +21,28 @@ Legend:
 * T - tuple
 * R - record
 
-## Properties
-
 ### Atomic in x
 
+tags: atomic, atomicity : atomicity in one argument
+
 The function is atomic in one argument.
-```
+```Rust
 f Ax // function specific
 f Vx ~ f\M Vx // map f on Vx, the return type depends on the function
 f L ~ f\M L // map f on L recursively, return L
 f T ~ f\M T // map f on T recursively, return T
 f R // call the overloaded generic function or try to cast to T
 ```
-When `f` is applied to a list it will ALWAYS return a list even if it can be collaped into a vector.
+When `f` is applied to a list it will ALWAYS return a list even if it can be collapsed into a vector.
 
 Fns: abs acos asin atan ceil cos exp floor ln neg not null sin sqrt string tan til
 
 ### Atomic in x,y
 
+tags: atomic, atomicity : atomicity in 2 arguments
+
 The function is atomic in both arguments:
-```
+```Rust
 Ax f Ay // function specific
 VxLT f Ay ~ VxLT f\L Ay // map on the left arg
 Ax f VxLT ~ Ax f\R VxLT // map on the right arg
@@ -46,23 +58,31 @@ Fns: + - * / & | = > < <> >= <= div %
 
 ### Preserves null (in x)
 
+tags: null : preservation of nulls
+
 The function always returns null if one of its arguments is null.
 
 Fns: + - * / abs acos asin atan ceiling cos div exp floor ln neg sin sqrt tan
 
 ### Numerical
 
-The function is defined for numerical types only. It may return other types as is.
+tags: numerical : function works with numbers
+
+The function is defined for numerical types only (including temporal). It may return other types as is.
 
 Fns: + - * / % abs acos asin atan ceiling cos div exp floor ln neg not sin sqrt tan
 
 ### Float
 
-The function always returns a double value (an atomic function returns a float for an atom).
+tags: float : function works with floats
+
+The function always returns a float value (an atomic function returns a float for an atom).
 
 Fns: acos asin atan cos exp ln sin sqrt tan
 
 ### Boolean
+
+tags: bool, boolean : function returns a bool
 
 The function always returns a boolean (an atomic function returns a boolean for an atom).
 
@@ -89,12 +109,12 @@ fns: + - * / & | = > < <> >= <= ~
 ### Reuse
 
 An argument of type Vx can be reused for the result.
-```
+```Rust
 1+til 100 // here the vec with til 100 can be used to store the result of 1+
 ```
 
 The argument will be reused if there is only 1 reference to it and its size is the same as the size of the result.
-```
+```Rust
 1.1+til 100l // ok, long and double have the same size
 1l+til 100 // not ok, long and int have a different size
 ```
@@ -121,15 +141,15 @@ Fns: all any max min sum
 
 ### Lazy
 
-The function will not be executed for Vx values. It will be saved into a thunk and if another lazy function is called on this thunk it will be added to the thunk as well. On assign or when a non-lazy function is called on the thunk it will be executed. The thunk is ALWAYS a vector of a fixed size - you can combine only atoms and vecs of the same size. Also you can use lazy aggregation functions, they will produce a value with type T1 (aggregated thunk). The lazy functions accept T1 values and return T1 values back:
-```
+The function will not be executed for Vx values. It will be saved into a thunk and if another lazy function is called with this thunk it will be added to the thunk as well. On assign or when a non-lazy function is called with the thunk it will be executed. The thunk is ALWAYS a vector of a fixed size - you can combine only atoms and vecs of the same size. Also you can use lazy aggregation functions, they will produce a value with type T1 (aggregated thunk). The lazy functions accept T1 values and return T1 values back:
+```Rust
 a*b+c // b+c will be put into a thunk, a* will be added and then the thunk will be executed
 all a+b // all will produce a T1 value
-wavg(a,b) ~ (avg a*b)*count a // the reason why agg functions do not execute thunks - to combine the results of several agg functions
+wavg(a,b) ~ (avg a*b)*ncnt a // the reason why agg functions do not execute thunks - to combine the results of several agg functions
 ```
 
 Why do we use thunks? During execution the vectors inside (they all have the same length) will be splitted into chunks and the expression will be calculated separately for each of them and in parallel. This can potentially significantly reduce the load on the memory when the same vector is used several times and speed up calculations. Also the thunk can detect if some intermediate vector will not be used later and remap chunks to only a small part of it (~ number of CPUs chunks), this will further reduce the memory usage:
-```
+```Rust
 // consider this expression
 sum b+x*(x+a)
 // if x is a vec and a and b are atoms:
@@ -167,6 +187,12 @@ x f x ~ x, for binary
 ```
 
 Fns: & | abs ceiling distinct floor
+
+### Message
+
+Related to message passing.
+
+Fns: recv peek flush send ssend
 
 ## Unary operators
 
@@ -206,10 +232,11 @@ Do not confuse with assign. Returns its argument as is.
 
 Deconstruct an object. Generally returns the first argument of `!` construct function (`val` returns the second argument).
 * `key dict` - dictionary keys.
-* `key record` - record ID.
+* `key record` - public field names (not rid because rid must be a secret). See also binary !.
 * `key recordID` - public field names.
-* `key atom/vec/tuple/list` - type symbol that can be used with `$` or `!`.
+* `key atom/vec/tuple/list` - type as a symbol that can be used with `$` or `!`.
 * `key user_fn` - arguments.
+* `key channel` - pid of the process.
 
 ### - (neg), neg
 
@@ -217,8 +244,8 @@ Atomic, numerical, reuse, lazy, preserves null.
 
 Type map: bxc -> i, hileftdz -> hileftdz.
 
-Negates value.
-```
+Negates a value.
+```Rust
 -x
 10 ~ neg -10
 ```
@@ -230,7 +257,7 @@ Atomic, boolean, reuse, lazy.
 Type map: bxhileftdzsc -> b.
 
 For null returns 1b, otherwise 0b.
-```
+```Rust
 ^x
 0b ~ null -10
 ```
@@ -250,14 +277,14 @@ Returns a list of numbers 0..n-1 for '..n'. See also the binary version `range`:
 til 100 // alternative instead of ..:
 ```
 > `var ..x` is `(..)(var;x)` if `var` is not an unary/binary system function. The same is true for `(expr)..x` and other data-like left values. Alternatives:
-```
+```Rust
 var ..:x // unary form of ..
 var (..x)
 var til x;
 ```
 
-> In an assign it means splice index:
-```
+> In the assign it means splice index:
+```Rust
 a(e ..):val; // is interpreted as a(e 0;e 1;..):val
 ```
 
@@ -299,7 +326,7 @@ type x;
 "I"~type 1 2 3
 ```
 Return values: one of bxchilfedtzs for atoms, one of BXCHILFEDTZS for vectors, 0(generic list), @(function including built-ins), u(tuple), !(dictionary),
-rR(record and rec definition), &(reference), #(channel), _(none).
+rR(record and rec definition), &(reference), #(channel), _(none), j(atomic), o(box).
 
 `@` has the syntactic use so `:` suffix is required: `@:`:
 ```Rust
@@ -478,7 +505,7 @@ val,T1 -> T2 where T2.i = val,T1.i
 ### ! (construct)
 
 Construct a composite value:
-```
+```Rust
 keys!values  // create a dictionary
 ![a:10;b:20] // closely related special syntax for sym dicts
 record!dict  // create a record from a dictionary
@@ -486,6 +513,8 @@ record!list  // create a record from a list/vector
 'u'!list     // create a tuple from a list/vector
 '0'!tuple    // create a list from a tuple/vector
 'v'!list/tuple // convert to a vector if possible
+// inside record function
+'0'!record; 'u'!record; '!'!record // return a list/tuple/dictionary of ALL record values
 ```
 
 ### / (division)
@@ -876,12 +905,29 @@ Functions produced by `enc` (and syntactic transformers/macros) will be shown as
 ```
 to underline that they are artificial and can't be parsed from its string again.
 
+### err ern
+
+Send to 'stderr' (effect):
+```Rust
+err x // as is, if x is not a string 'string' willbe called
+ern x // like err but add '\n', also if x is a uniform list print each element
+ern ("str1";"str2") // ~ ern\M arg
+```
+
 ### eval
 
 Evaluate a parse tree/string.
 ```
 eval "1+2"
 eval (+;1;2)
+```
+
+### except
+
+`x` with element from `y` removed:
+```Rust
+,1 ~ 1 2 3 except 2 3 4
+1 3 ~ 1 2 3 except 2
 ```
 
 ### exit
@@ -916,6 +962,25 @@ floor x
 10 ~ floor 10.1
 ```
 
+### flush
+
+Flush all pending messages:
+```Rust
+flush(); flush 1b; // with 1b flush also prints them
+```
+It returns the number of purged messages.
+
+### getenv
+
+Type: symbol, char, string.
+
+Get a virtual environment variable (using `#env` process). If it wasn't set manually try to get the system variable:
+```Rust
+getenv 'PATH'; // system variable
+getenv "not_system_var"; // user defined
+```
+See also `sysenv`, `setenv`.
+
 ### hll (hyper log log)
 
 List.
@@ -936,6 +1001,27 @@ Internal helper fns:
 2. ref count
 3. encode
 4. exit
+5. ns2module
+6. atomic ops
+7. create bmap
+8. update bmap
+9. unpack bmap
+10. extract globals
+11. voml parser
+12. make grefs
+13. rename module grefs
+14. box a value
+15. set the default timezone (times;offsets)
+16. length after serialization
+17. serialize
+18. deserialize
+
+### inter
+
+Intersection of two vectors/lists:
+```Rust
+2 3 ~ 1 2 3 inter 2 3 4
+```
 
 ### is
 
@@ -1068,6 +1154,14 @@ min x
 1 ~ min 1 2 3
 ```
 
+### minmax
+
+Can be used only with numerical vectors. Returns min,max,length as longs where length is max-min+1 or 0Wl if the difference is too large.
+```Rust
+0 99 100l~minmax ..100
+```
+Use this function to check if bmap can be used with this vector.
+
 ### mins
 
 Calculates running min.
@@ -1135,6 +1229,15 @@ not x
 0b ~ not -10
 ```
 
+### oun out
+
+Send to 'stdout' (effect):
+```Rust
+out x // as is, if x is not a string 'string' will be called
+oun x // like out but add '\n', also if x is a uniform list print each element
+oun ("str1";"str2") // ~ oun\M arg
+```
+
 ### ov (object from vector)
 
 Joins together list/vector elements.
@@ -1156,8 +1259,11 @@ Ax ov Vb // get atom of type x, Vb length must be compatible with Ax size
 Get an atom from a hex representation:
 ```Rust
 Ax ov Vh // get atom of type x, Vh length must be compatible with Ax size
-1234~1 ov 0x0 vo 1234
-1b ov Vh // result type (XHIL) is guessed from Vh size
+1234~1 ov 0x0 vo 1234 // the argument is expected to be in the big endian format (as returned by vo)
+0x0 ov Vh // result type (XHIL) is guessed from Vh size
+"i" ov byte_vector // convert several values using the default platform endianess
+"I" ov byte_vector // + swap endianess, all numerical types are supported
+V.be("i") ov byte_vec // or V.le if you want a specific endianess
 ```
 
 Get an int/long from an int/long list and base(s):
@@ -1169,13 +1275,22 @@ Get an int/long from an int/long list and base(s):
 ### parse
 
 Returns a parse tree.
-```
+```Rust
 >parse "1+a"
 +
 1
 'a'
 ```
 See also `xparse`,`lex`.
+
+### peek
+
+Print all pending messages:
+```Rust
+peek(); peek 10; // all/only the first 10
+```
+
+See also `flush`.
 
 ### prev
 
@@ -1190,15 +1305,21 @@ See also `next`,`xprev`.
 ### recv
 
 Wait for a message on the process's read channel and handle it:
+```Rust
+recv(queue_id;timeout;?[pattern=>handler;..])
+recv(time.z;0;{|m| if m~'msg'`1b`none})
 ```
-recv(timeout;?[pattern=>handler;..])
-recv(0;{|m| if m~'msg'`1b`none})
-```
-`recv` uses `msgs` variable as a buffer. It reads all available messages before processing them to prevent input queue overflow.
-Your handler function must either handle all messages or return `none` to indicate that a message wasn't handled. When `recv` is
-called it always scans `msgs` from the begining.
+`recv` reads all available messages before processing them to prevent input queue overflow.
+Your handler function must either handle the message or return `none` to indicate that the message wasn't handled. `queue_id` can be used to avoid scanning all messages on repeated recv calls.
+`time.z` id can be used for unique ids. recv always scans messages from the start if id is 0.
 
-Use the special form `recv`, it handles `none` case automatically.
+Use the special form `recv`, it handles `none` case automatically:
+```Rust
+recv[
+  'msg' => do_something;
+  ...
+]
+```
 
 ### rot rotn
 
@@ -1213,36 +1334,20 @@ T(#x;2)#x // rotate is based on take
 ### send
 
 Send an async message:
-```
+```Rust
 '#p' send ('msg';data)
 ```
+Returns a bool to indicate success/failure (the channel is not valid). 0b is returned because there is no way to guarantee the validity of a channel. Also 1b doesn't guarantee that the message will be received.
 
-### ss (string search)
+### setenv
 
-Searches a string for a substring. You can use one * inside the pattern. See the pattern's description in `like`. `ss` returns a pair of lists of start/end positions.
+Set a virtual environment variable (using `#env` process):
+```Rust
+'var' setenv 1 2 3; // it is not a system variable so any value is accepted
 ```
-(,1;,3) ~ "abcd" ss "[bp]c"
-(1 7;5 12) ~ "a(10),b(100)" ss "(*)"
-("a(10),b(100)";"d(-100)") ss "(*)" // ss also searches inside lists on the left
-```
+Setting a system environment variable is dangerous in a multithreaded process so it is not yet supported.
 
-### ssend
-
-Make a sync request:
-```
-channel ssend message
-channel message; // there is a shortcut, no need to use ssend explicitly
-'#m' ('ch';'#stock.tp') // try to get a service by name
-```
-`ssend` creates a `req` (request) from a message, sends it to the channel and waits for `resp` message. There is no timeout but `send` checks every second if the target channel is still alive.
-
-### ssr (search string and replace)
-
-Searches a string for a pattern and replaces it with another string. You can use one * inside the pattern. See the pattern's description in `like`:
-```
-"ax,bx" ~ ssr("a(10),b(100)";"(*)";"x") // replace with a string
-"a0 1,b0 1 2" ~ ssr("a(2),b(3)";"(*)";{|x| string .."I"$1_-1_x})
-```
+See also `getenv`, `sysenv`.
 
 ### show
 
@@ -1252,6 +1357,46 @@ Convert a value into its user friendly string representation and print it to std
 ```
 show x
 ```
+
+### sqrt
+
+Atomic, numerical, float, respects null, reuse, lazy.
+
+Type map: bxhilftdz -> f, e -> e.
+
+Calculates x^(1/2).
+```
+sqrt x
+3f ~ sqrt 9
+```
+
+### ss (string search)
+
+Searches a string for a substring. You can use one * inside the pattern. See the pattern's description in `like`. `ss` returns a pair of lists of start/end positions.
+```Rust
+(,1;,3) ~ "abcd" ss "[bp]c"
+(1 7;5 12) ~ "a(10),b(100)" ss "(*)"
+("a(10),b(100)";"d(-100)") ss "(*)" // ss also searches inside lists on the left
+```
+
+### ssend
+
+Make a sync request:
+```Rust
+channel ssend message
+channel message; // there is a shortcut, no need to use ssend explicitly
+'#m' ('ch';'#stock.tp') // try to get a service by name
+```
+`ssend` creates a `req` (request) from the message, sends it to the channel and waits for `resp` message. There is no timeout but `send` checks every second if the target channel is still alive.
+
+### ssr (search string and replace)
+
+Searches a string for a pattern and replaces it with another string. You can use one * inside the pattern. See the pattern's description in `like`:
+```
+"ax,bx" ~ ssr("a(10),b(100)";"(*)";"x") // replace with a string
+"a0 1,b0 1 2" ~ ssr("a(2),b(3)";"(*)";{|x| string .."I"$1_-1_x})
+```
+
 
 ### str
 
@@ -1275,18 +1420,7 @@ Returns a string representation of an object. `stringn` returns a `show` represe
 "1 2\n2"~stringn (1 2;2)
 "(1 2;2)"~string (1 2;2)
 ```
-
-### sqrt
-
-Atomic, numerical, float, respects null, reuse, lazy.
-
-Type map: bxhilftdz -> f, e -> e.
-
-Calculates x^(1/2).
-```
-sqrt x
-3f ~ sqrt 9
-```
+Both functions use `params.wh` to set max width/height. They use `string_` and `stringn_` as `f (obj;params.wh)`.
 
 ### sum
 
@@ -1307,6 +1441,15 @@ Calculates partial sums for ranges 0..1,0..2,...,0..cnt arg. Nulls are ignored.
 1 3 6~sums 1 2 3
 ```
 sums is equivalent to `+\S`.
+
+### sysenv
+
+Type: symbol, string, char.
+
+Get a system environment variable (with no caching via `#env`):
+```Rust
+sysenv 'PATH'
+```
 
 ### trigonometric functions
 
@@ -1333,6 +1476,13 @@ trim x; ltrim x; rtrim x
 
 Whitespace is: " \t\n\r" (unlike in Q where it is just " ").
 
+### union
+
+Add to `x` all elements from `y` that are not in `x`:
+```Rust
+1 2 3 4 ~ 1 2 3 union 2 3 4
+```
+
 ### val
 
 The result depends on the input value:
@@ -1354,7 +1504,8 @@ System commands:
 * T("pos";idx) - if idx is positive returns info for the fn idx levels below, if negative - idx levels from the start (usefull to get the calling position in a script). If the fn at idx is not a user fn next idx is tried.
 * T("stack") - returns a list of entries where each entry corresponds to a function call/other entity. Fn call: (func,start idx,line,col,name,line txt). Effect: symbol. Internal: string.
 * T("env") - current global user env.
-* T("xenv") - current global env (user + system).
+* T("senv") - system env.
+* T("benv") - basic env (default user env).
 * T("stackv"), T("stackv";idx) - get the value stack, a value from the stack at idx.
 // idea: * T("exec";"expr"\[;is_sync\[;env_dict\]\]) - execute an expression. `is_sync` is true by default (means execute in a separate sync function, execute on the current stack otherwise). `env_dict` is an optional environment (sym!list), the current env is used otherwise, applicable only if `is_sync=1b`.
 
@@ -1382,7 +1533,7 @@ Get a bit representation of an atom.
 
 Get a hex representation of an atom.
 ```Rust
-0x000004d2~0x0 vo 1234 
+0x000004d2~0x0 vo 1234 // the returned value is in the big endian format, `rev` it if needed
 ```
 
 Get a representation in base N.
@@ -1520,6 +1671,19 @@ x f\L y
 ("a-x";"b-x";"c-x") ~ "abc",\L"-x"
 ```
 
+### Lock
+
+*Local* critical section:
+```Rust
+1b~{|| locked 'x'}\Lock['y']\Lock['x'](); // query state
+>{|| {||}\Lock['x']}\Lock['y']\Lock['x']() // double use => exception
+Unhandled effect: exc
+Exception: locked
+```
+Because it is local you can't wait until the lock is lifted. You can only abort/raise an exception.
+
+Particulary useful in `recv` to ensure data consistency in case you (or `vek`) call `recv` inside `recv`.
+
 ### M (map), Mi (map with index)
 
 Call a function once for each value(s) in a list(s):
@@ -1588,6 +1752,20 @@ In case of 2+ arguments:
 
 The first argument is always the accumulator.
 
+### TO (timeout)
+
+Sends 'timeout' message after the provided time has passed. The message is handled by the default handler that raises '?timeout' effect. It will have no effect if TO function has returned,
+otherwise timeout exception is raised:
+```Rust
+f\TO[100](a1;..) // in ms
+f\TO[00:00:10] // time interval
+f\TO[time.z+0D00:01] // up to timestamp
+f\TO[0D00:01] // timespan interval, value must be less than 1000D
+```
+You can use several TOs with different timeouts at the same time. TO starts a new subprocess on each call with a different guard value.
+
+Currently timeout can be received only if `recv` is called. TODO: force recv from time to time.
+
 ### W (swap)
 
 One argument - duplicates it and calls `f`:
@@ -1613,6 +1791,7 @@ Repeat a function while a guard condition is true:
 f\Wh[g] a; f\Wh[g](a1;..;an)
 {|x|x-1}\Wh[0<] 10 // subtract while x>0
 10 {|x y| (x-1;y-1)}\Wh[{|x y| 0<x+y}] 2 // Multiple args are ok, but `f` must return a list/vec of the same length
+f\Wh arg; // g is id if not provided, repeat until f returns 0b
 ```
 Both functions must have the same arity.
 
@@ -1621,10 +1800,34 @@ Both functions must have the same arity.
 (10 2;9 1;...;4 -4) ~ 10 {|x y| (x-1;y-1)}\Whs[{|x y| 0<x+y}] 2
 ```
 
+### X (eXecute)
+
+Start a new process without a channel:
+```Rust
+f\X(a1;..) // default environment (val T("benv"))
+f\X[dict](a1;..) // with additional environment
+```
+1b is returned on success.
+
+### XX (eXtended eXecute)
+
+Start a new process. Additional parameters:
+* ch - 0b/1b create or not a channel.
+* e - user environment.
+* qlen - message queue length (default: 100, qlen == 0 means use the default).
+Returns the started process's channel on success if ch is 1b or 1b otherwise. Non 0 qlen value automatically sets ch to 1b.
+
+(!) It is not possible to change the queue length of an existing queue.
+
+```Rust
+ch:f\XX[![ch:1b]] data;
+```
+
 ## Prefixes
 
 ### \ (exit)
 
+Sends `exit` message to `main`:
 ```Rust
 \\ // exit with 0 code
 \\ 1 // exit with any code
@@ -1695,7 +1898,7 @@ An effect (or an algebraic effect) is a tool to abstract side effects. It can be
 
 You can create your own effects or use the built-ins like 'time', 'exc', 'file', etc.
 
-All effects including system effects can be intercepted. The handler can decide - continue the operation, abort it or save the current state and call it later.
+All effects including the system effects can be intercepted. The handler can decide - continue the operation, abort it or save the current state and call it later.
 
 ### seff
 
@@ -1718,6 +1921,19 @@ It can be used in an effect handler to stop the current calulation and return to
 abort val;
 seff('exc';{|e| abort e};{|x y| "passed: ",x+y};1;'a') // returns "type"
 seff('exc';{|e| e};{|x y| "passed: ",x+y};1;'a') // without abort you get "passed: type"
+```
+
+`abort` can be used with a function. In this case a clean up of the stack will be done and this function will be tail called from the handler. The stack between `seff` and `eff` calls is freezed until the handler is done via `abort` so in this way
+you may unfreeze it and free unnecessary variables.
+```Rust
+abort {|x y| x+y}`1`2;
+```
+
+Special `abort` call (NYI):
+```Rust
+abort eff value; // reraise the same eff
+// not strictly required because
+'eff' eff value; // does the same thing but allows you to terminate the handler at any point + ensures all resources from the current handler are freed
 ```
 
 ## Special forms
@@ -1786,6 +2002,15 @@ fmt"result: {}",res+1; // as an argument
 
 > fmt string is a normal string so ", \\ etc inside "{..}" MUST be prefixed with \\.
 
+### own
+
+Take a value from a variable and substitute it with `id`.
+```Rust
+r:10;
+a:own[r];
+r~id
+```
+
 ### ref
 
 Get a reference for a variable. It can be usefull if you want to update it in-place.
@@ -1801,6 +2026,19 @@ Return a value from a function:
 ret value;
 ret(1;2;3); // ~ ret (1;2;3), ret always returns 1 value
 ```
+
+### v
+
+Parse `voml` expression:
+```
+d:v[
+ a=10
+ "a's type"='int'
+ [dict]
+ x = 0D10:10
+];
+```
+`voml` is similar to `toml` format, the difference is all constants follow `vek` rules.
 
 ## Pattern matching
 
@@ -1888,10 +2126,39 @@ recv(timeout;\? 'a'=> 1) // equivalent to this
 
 ## Special records
 
+### atomic
+
+Operations with atomic values. They can be used as an alternative to messages:
+```Rust
+a:atomic.new num; // create a new atomic and init it with a number
+atomic.get a; // get its value
+atomic.set a`num; // set its value
+atomic.add a`num; // add a number to it (can be negative to imitate sub)
+atomic.swap a`num; // swap and return its previous value
+atomic.cmpx a`num1`num2; // set to num2 iff it equals to num1, returns 1b(success)/0b(failure)
+```
+Atomics are longs. They are allocated therefore can be shared between processes. They are atomics so it is safe to modify them concurrently.
+
+Note that `a` is passed by value. It is ok to create copies of an atomic value. Communication example:
+```Rust
+a:atomic.new 1; {|a| {||sleep 100}\Wh[{|| 1=atomic.get a}](); show "end"}\X a; // start a process
+atomic.set a`0 // force it to stop
+```
+
+### C
+
+Simple tcp connection:
+```Rust
+c:C[p:port;h:"host";n:"name";pwd:"pass";d:"descr"] // all optional except port`
+c:C[p:1234].open; // use open to open the connection
+// connection opens in request/reply mode only
+```
+This record is for debug/exploration/etc. For any serious use there should be a special module.
+
 ### time
 
 Can be used to get GMT/local (date)time.
-```
+```Rust
 time.z; time.d; time.t // GMT datetime, date, time
 time.Z; time.D; time.T // local time
 ```
@@ -1899,14 +2166,14 @@ time.Z; time.D; time.T // local time
 ### path
 
 Path is used to represent a file system path:
-```
+```Rust
 p["some/path"] // short version
 path[p: "some/path"] // record syntax
 path!,"some/path" // raw syntax
 ```
 
 Operations:
-```
+```Rust
 p.stat // returns a dict with fields: dir - yes/no, link - yes/no, len - long, mt at ct - modify, access, create times.
 p.len // length as long
 p.dir // is a dir
@@ -1915,17 +2182,175 @@ p.file // file part of the path
 p.ext // extention part of the path
 p.read "x" // read an array from a file, x is a type letter (bxchileftdz, s is not supported), x=b => values will be cast to 0/1.
 p.get // if extention is v load the file and execute
+p.cd sym/str/char/str list/sym list // make a new path: old_path/x/y
+p[].cwd // get the current working dir
 ```
 
-## Effect's protocols
+## Variables
+
+### A
+
+Contains usefull constants:
+* `n` - numbers.
+* `a` - ASCII small letters.
+* `A` - ASCII capital letters.
+* `aA` - `a` and `A`.
+* `aAn` - `a` and `A` and `n`.
+* `pi`
+* `t` - vek base types as letters.
+* `T` - vek base types as capital letters.
+
+### V
+
+Less used function.
+
+#### args
+
+Returns a list of the process arguments:
+```Rust
+V.args()
+```
+
+#### be
+
+if the platform endianess is big it is `id`, otherwise it is `upper`. To be used with `ov` to select the desired endianess.
+
+#### globals
+
+Extract globals from a value in the given enviroment:
+```Rust
+V.globals val T("env")`{|| ... } // from a function for example
+// the second arg is a sym list => process values in the provided env
+V.globals val T("env")`'f1,f2'
+```
+The function returns a list with three values:
+* all referenced globals (except basic variables).
+* assigned (writable) globals.
+* 0b/1b - 1b if recursion is detected. Self recursion doesn't count.
+
+#### le
+
+if the platform endianess is little it is `id`, otherwise it is `upper`. To be used with `ov` to select the desired endianess.
+
+#### listen
+
+Starts a tcp listener:
+```Rust
+c:V.listen 'name'`port`(); // port can be 0 to use a random port, the third argument is explained below
+// all listeners register with 'main' so you can get them by name
+'#m' '@name'
+// to stop it
+c 'stop';
+```
+This is a very basic listener that start a new subprocess for each connection. The third param may be a dictionary with fields:
+* check - arg: reference to the conn dictionary, return 1b if it is ok. This func is called in the listener itself.
+* open - arg: reference to the conn dictionary, it is called in the new connection process when its channel is ready.
+* close - the connection is closed, the input value: "" - you closed it, "stop" - peer closed it, "some err" - there was an error, other - unserialized msg (avoid it).
+* msg - args: reference to the conn dictionary, msg. Async message.
+* req - args: reference to the conn dictionary, msg. Request message. The func must return a correctly serialized reply.
+* repl - args: reference to the conn dictionary, msg. Reply message.
+
+Connection dictionary: ip,uname,pass,desc,ch.
+
+The default functions:
+* check always returns 1b.
+* open does nothing.
+* close does nothing.
+* msg applies `val` and prints errors.
+* req returns back the result of `val` (including exceptions).
+* repl does nothing.
+
+#### tzinfo
+
+Parse a file in tzinfo format: `V.tzinfo "/usr/share/zoneinfo/Europe/Berlin"`.
+
+#### scnt
+
+Given a vek object returns its length after serialization on success. Returns the (sub)object that can't be serialized otherwise (so there is an error if it retuns non int/long/atom in general).
+The returned length is slightly less than the length of the vector returned by `V.ser` (9 bytes atm) to make this fn easier to use with records.
+
+You can serialize: atoms, vectors, lists of serializable objects, none, dictionary, tuple, unary/binary/naery primitives.
+Functions can be serialized if they don't use globals/context locals and have a correct text representation (not produced by a macro/encode). Also it is an error to send a function that uses any macroses except the default ones.
+The reason - functions are sent as text.
+
+#### ser
+
+Serialize a vek object. Returns a byte list. Use `scnt` to check if the object can be serialized.
+
+#### deser
+
+Deserialize a vek object.
+
+#### sys
+
+Execute a system command: `V.sys "ls ."`. Returns:
+* a list of strings on success
+* an exception "error" if the cmd was unsuccessful, details field will contain the stderr output
+* an exception "failed" if the cmd is incorrect, details field will contain the error
+
+#### pget
+
+Get a system parameter:
+* restart, bool - restart or not the process if there is an unexpected error. 0b by default.
+* rlimit, int - how many times to restart. 0W by default.
+* rfn, function - the function that will be called on restart.
+* wh, (int;int) - width/height for string/stringn/show/etc functions. (0N;50) by default.
+* rvalue, bool - send the return value to the parent process as a message: ('child';pid;value). The value can be an exception. Not implemented.
+
+> Parameters are local to a process. 
+> 'rlimit' is not getting decremented, there is another counter. This counter gets reseted after each successful async call. You can maintain your own counter to enforce a different policy.
+> restart functionality is implemented to avoid loosing data (like a very big table) accidentally. With Erlang's "just restart" approach data would be lost.
+
+#### pset
+
+Set a system parameter. See `pget`.
+```Rust
+>V.pget 'wh'
+0N 50
+>V.pset 'wh'`20 30
+1b
+```
+
+#### voml
+
+`voml` parser. See `toml` help online. `voml` is similar except that all names/constants follow `vek` rules. See also `v` syntactic extention.
+
+## Effect protocols
 
 ### channel
 
-* '#s' - get self write channel.
+* '#s' - get self write channel (create it if it doesn't exist yet).
 * '#m' - get main's write channel
 * '#p' - get parent write channel
-* (channel;msg) - send a message. "send" error is raised if the channel is invalid.
-* int value - call recv with timeout in millis. Output: (0x00; msg) on success, 0x01 - empty, 0x02 - disconnected, 0x03 - timeout. 0x01 is returned if timeout is 0, if timeout is negative - default timeout (1 year atm).
+* (id;msg;timeout) - receive, msg is not none if it was rejected (it is not the first call). id is recv id - if called several times the position in queue is saved. All pending msgs will be received and stored in a queue, only one is returned. Output: (0x00; msg) on success, 0x01 - empty, 0x02 - disconnected, 0x03 - timeout. 0x01 is returned if timeout is 0, if timeout is negative - default timeout (1 year atm).
+* (channel;msg) - send a message. Returns a bool to indicate success/failure (channel is invalid). There is no exception because channel validity can't be guaranteed.
 * channel - return 1b if valid, 0b otherwise.
 
 You can send messages to yourself. If '#s' has only one refcount (itself) the process will terminate.
+
+### net
+
+* (0x00;ip) - returns hostname, port can be added, atm it is hardcoded.
+* (0x01;"host:port") - returns ip, port is required.
+* (0x02;ip;port;flags) - listen, returns listener channel so you can control it, listener sends msgs to the parent
+* (0x03;ip;port;uname;pass;desc;flags) - connect
+
+#### listen/connect
+
+See `IPC`.
+
+#### when connected
+
+You can send messages using the socket channel: ('msg';msg). You can send control commands: 'stop' (atm only one).
+
+You get back: ('msg';msg), ('err';error).
+
+Outbound msg must be produced with serialize.
+
+### spawn
+
+Params:
+* (f;a1;a2;..) - function to execute with its args
+* env as dict - environment, T("benv") values are expected
+* bool - create a channel or not
+* queue length

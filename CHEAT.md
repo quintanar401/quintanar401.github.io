@@ -51,7 +51,9 @@
 |       | apply                        | `binf.(1;2)` |
 |       | deep index as a function     | `(.)` and other cases where `.` is isolated |
 |       | deep idx with a suffix       | `.\Sfx` |
+|       | generic deep assign          | `.[name;idx;:;f;arg1;...]` |
 | ..    | any length in a pattern      | `?[x;(1;..) => 2]` |
+|       | splice index                 | `a(b..):c` means `a(b 0;b 1;..):c`|
 | ..    | non syntactic meanings       |
 |       | range/til                    | 2..10, 10 2..100, ..100 |
 | //    | comment                      | // some comment |
@@ -72,7 +74,7 @@
 |       | unary app with a suffix      | `@\Sfx` |
 | :     | assign                       | a:10 |
 |       | assign + index               | a(b;c):x, also a.b.0: 10 |
-|       | generic assign               | `@[name;idx;:;arg1;...]` |
+|       | generic assign               | `@[name;idx;:;f;arg1;...]` |
 | :     | intransitivity               | +\L:, make a verb intransitive |
 |       | unarity                      | +:, ..:, explicitly make unary |
 

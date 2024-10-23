@@ -2,7 +2,7 @@
 
 `vek` can be described as `APL`(`K` dialect) + `Erlang` + `Lisp`. It is `APL` because it is an array language on the expression level. It is `Erlang` because it
 supports message passing between processes and is concurrent by nature. It is `Lisp` because it is based on lists and supports macroses and syntax extentions.
-Also `vek` supports algebraic effects - a concept so powerful that its full potential is not yet known.
+Also `vek` supports algebraic effects as an abstraction for all side effects.
 
 Additional features:
 * Pattern matching.
@@ -18,19 +18,21 @@ As an array language it differs from other similar languages in:
 * \[\] are used for syntactic extentions. Indexing/calling a function and generic lists use ().
 
 Async/concurrent features:
-* All basic operations are parallelized if possible. `vek` also implements a feature that makes them even faster if they are groupped together.
-* All values are safe to use from different threads. If needed `vek` does copy-on-write. There is no shared writable memory/semaphors, etc, only messages.
+* All basic operations (+, sin, etc) are parallelized if possible. `vek` also implements a feature that makes them even faster if they are groupped together.
+* All values are safe to use from different threads. If needed `vek` does copy-on-write. There is no shared writable memory, semaphors, etc, only messages and atomics.
 * All IO operations are async in nature - they do not block, but sync for the programmer (they can be executed in a subprocess if full async is required).
 * The cost of starting a new process if very low (like in Erlang).
+
+Unlike Erlang `vek` is not immutable. Processes can have state.
 
 // * Resource monitoring: cpu, memory, IO. Limits per user.
 
 ### Array language - more details
 
-`vek` is closer to K/Q than APL/J. `vek` like K has only typed vectors and the mixed generic list that can be used to emulate matrices. A key difference vs K: there is no automatic conversion of
+`vek` is closer to K/Q than APL/J. `vek` like K has only typed vectors and the mixed generic list that can be used to emulate matrices. The key difference vs K: there is no automatic conversion of
 a mixed list into a vector, instead there is a special function that can do it. Reason - it is really annoying when sometimes a list randomly changes into a vector, if a list is almost
-a vector except an element at the end it will be fully checked on each update - introduces unexpected delays. `vek` adds a concept of a uniform generic list - a list with
-elements of one type (atoms or vectors). Operations with uniform lists can be easily parallelized. Records are introduced to allow new user types.
+a vector except an element at the end it will be fully checked on each update - introduces unexpected delays. Adverbs (suffixes) though produce a vector if possible. `vek` adds a concept of a uniform
+generic list - a list with elements of one type (atoms or vectors). Operations with uniform lists can be easily parallelized. Records are introduced to allow new user types.
 
 Syntactically `vek` also is closer to K/Q. The main difference is: adverbs are substituted by inflections to substantially increase their number.
 Also instead of being monadic/diadic/etc all functions are either transitive (expect a noun on their left) or intransitive, this concept is introduced because one of the goals of `vek` is to reduce
@@ -43,22 +45,26 @@ the visual weight of expressions (get rid of () and \[\] mostly):
 Another `vek`s goal is to increase the number of types (in Q there are anonymous lists and dictionaries only). `vek` has tuple and record types that are basically mixed lists with a fixed length.
 This allows us to add a label (name) to a type and access its elements also by name. Also we can be sure that it's impossible to assign to a missing name/index.
 
-The next goal is to introduce modules to make it easier to build large applications and libraries. `vek` is multithreaded so modules can't have (unprotected) internal state (unlike Q). Instead they
-are supposed to start subprocesses that can have global variables. These subprocesses can then handle requests asynchronously.
+The next goal is to introduce modules to make it easier to build large applications and libraries. `vek` is multithreaded so modules can't have unprotected internal state (unlike Q).
 
 IO operations are async, functions are executed on several worker threads. IO/Exceptions, etc are done via algebraic effects. Mmap is not used because it can block threads unpredictably and generally is worse than AIO (especially uring).
 
 ### Effects
 
-This concept is not yet fully understood. It is easier to list some of their applications.
+Effects abstract side effects. It is easier to understand them by some of their applications.
 
 #### Control flow
 
-Effects can be used to implement flow control structures like exceptions, break, continue, etc. In particular exceptions are implemented in `vek` via an effect by literally one line of code.
+Effects can be used to implement flow control structures like exceptions, break, continue, etc. In particular exceptions are implemented in `vek` via an effect by literally one line of code (all additional code is to make them more usable).
 
 #### State
 
-Effects can be used to implement dynamic/global state. If you need a global variable and don't want to pollute the global namespace you need just 1 line of code to implement them.
+Effects can be used to implement dynamic/global state. If you need a global variable and don't want to pollute the global namespace you need just 1 line of code to implement them. On the other hand
+global variables are not effects in `vek` to improve their performance.
+
+#### Services like IO
+
+All IO and many other services are implemented as effects in `vek`. Therefore it is very easy to add an additional service.
 
 #### Tests
 
@@ -93,6 +99,13 @@ code there is no difference if effects are really executed or return predefined 
 "x" // atom
 ""  // 0 length string
 "abc\t\r\n\\\"\010\x1a"  // vector(string), special sequences
+```
+Multiline strings:
+```Rust
+"""
+  str \
+  continues
+  new line"""
 ```
 
 #### Symbol
@@ -143,6 +156,11 @@ Date(d), time(t), datetime(z).
 10:10 10:11 10:12 // vector - values separated by exactly 1 space
 -10:10 // rules are similar to ints
 time.z; time.Z // + d,t. Can be used to get GMT/local date(time)
+
+time.hh time.mn time.ss // time components, can be applied to a vector too
+time.hour time.minute time.second // set to 0 all components smaller than requested
+date.yy date.mm date.dd // date components
+date.year date.month date.day // set to 1/0 all components smaller than requested
 ```
 
 ### Composite expressions
@@ -151,7 +169,7 @@ time.z; time.Z // + d,t. Can be used to get GMT/local date(time)
 
 ```Rust
 () // empty list
-(1;"a") // a list is generic if elements are different
+(1;"a") // a list is generic if elements have different types
 (1;2) // vector, similar to 1 2
 list(1;2) // explicitly generic
 ulist(1;2) // the same as (1;2), u means uniform - check uniformity and convert to a vector if possible
@@ -159,6 +177,7 @@ ulist(1;2) // the same as (1;2), u means uniform - check uniformity and convert 
 (),x // make a vector(if possible)/list
 x,() // make a generic list regardless of x's type
 'v'!x // try to convert to a vector
+'0'!x // convert to a list
 ```
 
 #### Tuple
@@ -178,9 +197,9 @@ See REC.md
 
 Function:
 ```Rust
-{|a1 a2|...}
+{|a1 a2|...} // several args
 {|| } // 0 args, it is a function with 1 arg that is ignored
-f[x+y] // synt extention for functions with 0,x,x y,x y z args.
+f[x+y] // synt extention for functions with 0,x,x y or x y z args.
 \f x+y // prefix form, can be used only if delimited. error: 1,\f x+y, should be 1,(\f x+y)
 ```
 
@@ -189,6 +208,7 @@ Return from a function:
 {|a| a+1} // the last expression is returned by default
 {|a| ret a; b} // ret keyword can be used
 {|a| ret; ret(1;2)} // both allowed. ~ ret :: & ret (1;2)
+{|| recv[x => ret y]; ...} // recv and ? blocks are functions, but ret in them is changed to 'ret' effect to imitate normal return
 ```
 
 Call a function:
@@ -252,7 +272,37 @@ Composite functions:
 #1+{|x y| x*y}@ // in other cases use @
 ```
 
-Multiargument functions. These are internal functions that do not have a fixed number of arguments. These are mostly suffixes like \\M.
+Multiargument functions. These are internal functions that do not have a fixed number of arguments. These are mostly suffixes like \\M. To emulate them use:
+```Rust
+f:{|x| #x}list@; // enlist args and pass them as 1
+```
+
+#### Other values
+
+References:
+```Rust
+ref global; ref local;
+```
+Create a reference with `ref`. It can be used in assigns:
+```Rust
+a:ref b; a(::):10; a(1):10; // b will be changed in both cases
+val a; // get b value, a by itself returns the reference
+a:10; // atm it reassigns 'a', b will not be changed
+```
+
+Write channels:
+```Rust
+val '#m'; // predefined main channel, there are also '#s' (self) and '#p' (parent) channels
+// channels are also returned in some cases like when you start a new process, open a connection, etc
+// '#m' (main) process maintains a registry, you can register your channel by name/request a channel by name
+```
+They can be used to send messages using `send` and `ssend` functions. get channel can be accessed only via the related effect.
+
+None:
+```Rust
+none
+```
+Indicates absence of something - an argument is not set, a request can't return any value. `none` when returned in `recv` handler means the message wasn't handled.
 
 #### Variables
 
@@ -272,7 +322,7 @@ Function locals - up to 2048 minus number of args.
 
 Context locals. Syntactically binded locals in the enclosing functions. Max depths - 8 functions. Only the first 256 locals at each depth can be referenced.
 ```Rust
-40~{|a| l:10; {|x| x+l+a} 20} 10;
+40~{|a| l:10; {|x| x+l+a} 20} 10; // a and l are ctxlocals
 ```
 > CONTEXT LOCALS ARE NOT CLOSURE LOCALS LIKE IN OTHER FUNCTIONAL LANGUAGES. See their description for their limitations.
 
@@ -280,7 +330,7 @@ Globals = up to 2048 globals. `set` and `val` can be used to set/get value of a 
 
 Context local's limitations:
 * `vek` doesn't create closures so such a local can be accessed only until its function returns.
-* any manipulation with a function - saving it for later use (tmp assignments are ok), sending to another thread, etc will break its link to the clocals.
+* any manipulation with a function - saving it for later use (tmp assignments are ok), sending to another process, etc will break its link to the clocals.
 * all above means that they can't be used to save state for a long time/emulate objects (unless you do an infinite loop like `{|| recv[..]; self()}`).
 If a function was successfully created then all its context locals can be theoretically accessed. If there is a runtime error then the function is called out of its syntactic context.
 There are advantages too: you can change such locals and the changes will be visible in the current computation in other functions.
@@ -291,7 +341,7 @@ The main reason to make such locals is to allow you to store large objects in th
 
 Whenever there is a call that is the last expression the enclosing function may be ended (its stack/args/locals cleared) before this call starts:
 ```Rust
-{|| a:10; ret f a; f a} // both exprs are a tail call
+{|| a:10; ret f a; f a} // both exprs are a `f` tail call
 {|| a:10; ret 1+f a} // this is not because 1+ is pending
 {|| ...; self()}() // tail calls can be used for infinite loops or just loops.
 ```
@@ -333,21 +383,39 @@ Case 2 is resource consuming and doesn't work well with the context locals.
 
 To abort the computation inside a handler (abort value is the return value of the corresponding `seff` call):
 ```Rust
-handler:{|v| if v=1`2`abort 3} 
+handler:{|v| if v=1`2`abort 3} // abort is a non local exit, so it can be invoked from a subfunction
+handler:{|v| if v=1`2`abort(f;3)} // this form is beneficial because the effect will be finished and stack cleared before f is called
 ```
+A handler can't end (in 'ret' sense) with an exception. Exceptions are effects themselves therefore a new handler will be executed.
 
 Soft effects:
 ```Rust
 '?name' eff value
 ```
-A soft effect call will not fail if there is no handler. `none` is returned instead.
+A soft effect call will not fail if there is no handler. `none` is returned instead. It is a syntactic sugar but a useful one.
 
-#### Other
-
-```JS
-() // empty generic list
-none // indicates absence of a value
+`ret` effect is special. It is used by recv/match macroses. If triggered it will end the function that called `seff`:
+```Rust
+{||
+  recv[
+    v => ... ret value ...; // ret here ~ return from the wrapping {|| } function
+    ...
+  ]
+  self()
+}
+// recv translates into ~
+{|| seff('ret';{|x|abort x};recv;..;..;{|x| ...; 'ret' eff value; ... })}
 ```
+
+Effect chaining:
+```Rust
+e1 e2 .. en // effect handlers form a sequence up to the current function
+e1 e2 [e3 e4 e5] e6 // if e3 is triggered when e5 is the last handler e3 e4 e5 are turned off, new effects (e6) may be added by the invoked handler
+[e1 e2 [e3 e4 e5] e6] // if it invokes an effect, the search will start with e6, then go to e2, e1
+e1 e2 e6 // this is why it is better to call abort(f;a1;..) if the handler will certainly abort, the stack will be cleared
+// exc doesn't do the early abort though, it is to allow the user to see all stack if there is a new exception
+```
+Brakets will always be balanced, this guarantees effect's consistency.
 
 ### Composite expressions
 
@@ -371,7 +439,20 @@ x,() // make generic, x: list, vector, atom
 
 ### Control expressions
 
-Cycles can be and should be implemented via suffixes/tail recursion.
+Cycles can be and should be implemented via suffixes/tail recursion:
+```Rust
+{|x| x+1}\M 1 2 3 // map
+3 2 1 {|x y| x+y}\F[10] 1 2 3 // fold, the initial value is optional when it can be guessed
+3 2 1 {|x y| x+y}\S[10] 1 2 3 // scan
+3 2 1 {|x y| x+y}\L 1 2 3;  // \L and \R are each left/right, map variations
+2 {|x y| (x+y;x*y)}\Do[5] 1 // Repeat, \Dos - scan version
+2 {|x y| (x+y;x*y)}\Wh[{|x y| 10000>y/x}] 1 // While, \Whs - scan version
+{|x y| x-y}\Pr 1 2 4 8 10 // run fn for pairs, result is 1 1 2 4 2 in this case
+{|x| // tail recursion can be used to implement any cycle
+   ...
+   self x+1
+}
+```
 
 #### if/then/else
 
@@ -415,7 +496,7 @@ a || c ~ if b`1b`a
 ### Errors/exceptions
 
 `vek` by default distinguishes 3 types of errors:
-* signals - timeout, exit and etc.
+* signals - timeout, exit, etc.
 * errors - unexpected errors caused by invalid expressions: `1+'a'`.
 * exceptions - errors raised by a user/library.
 All of them are based on effects and can be intercepted. Additional types of errors can be defined with effects too.
@@ -439,18 +520,19 @@ Effect: `err`.
 
 Ordinary exceptions that can be raised and captured by a user.
 ```Rust
-f\Exc[handler or value]
+f\Try[handler or value]
 handler:{|ex| ..};
 exc ![e:"name";st:0b;msg:"";data:()]; // only e is required
 exc "name"; // ~ exc ![e:"name"]
 exc data; // ~ exc ![e:"user";data:data]
 exc rexc!![...] // can be reraised or created manually
+f\ETry[h] // ETry will convert errors into exceptions (captures both err and exc)
 ```
 
 You can raise a chained exception - a list of 1+ normal exceptions.
 ```Rust
 exc cexc!![data:(e1;..;en)]
-exc ![e:"chained";(e1;..;en)];
+exc ![e:"chained";data:(e1;..;en)];
 ```
 Each `ei` will be converted into an exception if needed, chained exceptions will be spliced (the result will contain only simple exceptions).
 
@@ -461,14 +543,14 @@ Each `ei` will be converted into an exception if needed, chained exceptions will
 * data - additional data.
 
 Available functions:
-* str - returns a string representation of the exception.
-* show - prints the exception.
+* str - returns a string representation of the exception: `e.str`.
+* show - prints the exception: `e.show`.
 
 You can (using `eff` directly) raise an exception of any type but do not do it. `exc` expects either `rexc` or `cexc`. You can create your own kind of exception if needed.
 
 Effect: `exc`.
 
-### Verbs, nouns and etc
+### Verbs, nouns, etc
 
 `Vek` like other vector languages uses the natural language analogy. Unlike other languages that are based (most likely) on English, `Vek` is inspired by so called agglutinative languages (Finish, Japanese, ...). In these languages words are formed by stringing together morphemes and each morpheme generally has only one meaning/grammatical category. This means there is no need for adverbs and other similar constructs because their role can be taken by special morphemes.
 
@@ -488,16 +570,17 @@ b f\M a // with a suffix
 
 We can use suffixes and prefixes:
 ```JS
-word\Suffix  // most common inflection 
+word\Suffix // most common inflection 
 +\F // +/ in Q 
 
+// prefixes are macroses in vek
 \prefix expr // can be used for annotations, commands, other special purposes
 \t:100 f\M list // time it function
 ```
 
 The example above doesn't look impressive but agglutinative languages are really powerful when you want to condense a lot of meaning into one word.
 ```JS
-a f\Try[0]\Map\Swap b // Map,Swap for clarity. Swap args, apply g to each pair of a,b where g is f wrapped with an exception handler that returns 0 on an exception
+a f\Try[0]\Map\Swap b // Map(M),Swap(W) for clarity. Swap args, apply g to each pair of a,b where g is f wrapped with an exception handler that returns 0 on an exception
 ```
 
 The main benefit here is that we can use as many suffixes as we want. Some of them can play the grammatical role (Swap), others add an effect (Try), others change the behaviour (Map).
@@ -507,7 +590,8 @@ The main benefit here is that we can use as many suffixes as we want. Some of th
 A transitive verb is a verb that expects an argument on its left. These are:
 * Binary primitives like `+`.
 * Other core functions that are marked as transitive: `div`.
-* All verbs with a suffix: `f\L`.
+* All words with a suffix: `f\L`.
+* User functions are not transitive atm.
 
 All other verbs are intransitive. Note that a function with more than 2 args also can be transitive. A transitive verb becomes intransitive under the following conditions:
 * There is nothing on the left: an opening paren, ;, start of file and etc: `(-x;#x)`.
@@ -518,14 +602,15 @@ All other verbs are intransitive. Note that a function with more than 2 args als
 
 Special exceptions are `@` and `.` (apply functions) because they expect a function on the left.
 
-In other words a verb becomes intransitive if there is nothing that looks like data on its left. Note that you can use () to make any expression look like data: `(+)`. The transition rules are:
+In other words a verb becomes intransitive if there is nothing that looks like data on its left. Note that you can use () to make any expression look like data: `(+)` and `\I`(identity) suffix to make any
+expression look like a transitive function: `0 (0 1;2 3)\I 1`. The transition rules are:
 * A binary primitive becomes an unary primitive: take -> count.
-* Functions stay the same but expect their args on the right: `x div y -> div x`y`.
+* Functions stay the same but expect their args on the right: "x div y -> div x\`y".
 * Suffixed functions also expect their args on the right.
 
 The conversion can be done explicitly with `:`
 ```Rust
-+ -> +:
-+\F -> +\F:
++ -> +: // binary primitive -> unary
++\F -> +\F: // +\F: expects all args on the right
 div -> use () like div(x;y) or div x`y
 ```
